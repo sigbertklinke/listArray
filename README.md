@@ -1,6 +1,6 @@
 # listArray 
 
-Incomplete arrays with arbitrary R objects as indices. The aim is to create data objects which allow for accesses like x["test"] and x["test","test"]. For details read the package vignette.
+Incomplete arrays with arbitrary R objects as indices. The aim is to create data objects which allow for accesses like x["test"] and x["test","test"]. For details read the [package vignette](https://htmlpreview.github.io/?https://github.com/sigbertklinke/listArray/blob/master/vignettes/listArray.html).
 
 # Installation  
 
