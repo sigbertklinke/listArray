@@ -1,0 +1,250 @@
+---
+title: "listArray"
+author: 
+- name: "Sigbert Klinke" 
+  email: sigbert@hu-berlin.de
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: 
+  html_document:
+    toc: true
+vignette: >
+  %\VignetteIndexEntry{listArray}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r, setup, echo=FALSE}
+library(listArray)
+```
+
+# General
+
+The aim of the package `listArray` is to create a data object which looks like an array, but behaves like a list.
+Thus, something like 
+
+* `x[letters[1:3]]` should address one element and
+* at same time `x[letters[1:5]]` should be possible, too.
+
+Additionally, any R object should possible as __index__, thus it should work:
+
+* `x[1]`,
+* `x["a"]`,
+* `x[1,2]`,
+* `x[c(1,2)]`,
+* `x[mean]`, 
+* `x[NULL]`, or
+* `x[iris]`.
+
+The package [hash](https://cran.r-project.org/package=hash) does something similar. But the keys follow
+list naming convention and does not allow array indices.
+
+Note that neither speed nor memory efficiency have any importance for the implementation.
+
+# Generate a `listArray` from a vector, matrix or array
+
+A `listArray` is a list (or environment), therefore list (or environment) operations can be applied:
+
+```{r}
+l <- listArray(1)
+length(l)
+names(l)
+l[[1]]
+class(l)
+```
+
+Thus, every R object which used in the index is translated to a unique name. The original indices can be obtained as string by:
+
+```{r}
+keys(l)
+```
+
+## Unnamed or named vectors
+
+For creating vectors the `listArray` function can be used.
+
+```{r}
+# unnamed vectors
+v <- 1:5
+l <- listArray(v)
+keys(l)
+#
+l <- listArray(letters[1:5])
+l[1]
+# named vector
+v <- 1:5
+names(v) <- letters[1:5]
+l <- listArray(v)
+l["a"]
+```
+
+## Matrix
+
+For matrices or arrays:
+
+```{r}
+m <- matrix(1:9, 3, 3)
+l <- listArray(m)
+l[2,3]  # should be 8
+```
+
+## Names or numbers as indices
+
+Since for `listArray`s `l[1]` and `l["A"]` is something different, you have to decide with named vectors, matrices
+or arrays if you use the names or numbers. The default is to use names if available.
+
+```{r}
+m <- matrix(1:4, 2, 2)
+colnames(m) <- LETTERS[1:2]
+l <- listArray(m)
+keys(l)
+```
+
+You can force with `use.names=FALSE` that always numerical indices will used
+
+```{r}
+m <- matrix(1:4, 2, 2)
+colnames(m) <- LETTERS[1:2]
+l <- listArray(m, use.names=FALSE)
+keys(l)
+```
+
+## Ignore entries in a vector, matrix or array
+
+Sometimes you may not want to store certain elements of vector, matrix or array; just think in terms of _sparse_ objects. 
+
+```{r}
+m <- diag(3)
+l <- listArray(m, ignore=0)
+keys(l)
+```
+
+The parameter `ignore` can be either a table of values to exclude or a function which returns for a vector a logical vector with `TRUE` (= value excluded) and `FALSE` (= value included).
+
+```{r}
+nozeroes <- function(v) { v==0 }
+#
+m <- diag(3)
+l <- listArray(m, ignore=nozeroes)
+keys(l)
+```
+
+## List or environment as base?
+
+Rather than using a list it is possible to use an environment as base which might be of interest for package developers.
+
+```{r}
+e <- listArray(env=TRUE)
+class(e)
+e[1] <- "hello world"
+e[1]
+ls(e)
+```
+# Access a `listArray` object
+
+## Extract operators
+
+You simply use the `[` operator to access `listArray` elements.
+
+```{r}
+l <- listArray()
+l[0] <- 1
+l[0]
+l[pi] <- pi
+l[pi]
+anotherpi <- pi
+l[anotherpi]
+l[1,-2] <- 3
+l[1,-2]
+```
+
+## Difference between `listArray` and vector
+
+A `listArray` considers each index element as different. The following works for vectors:
+
+```{r}
+m <- 1:5
+m[1:2]
+```
+
+But `l[1:2]` returns `NULL` since the index `1:2` does not exist.
+
+```{r}
+l <- listArray(m)
+l[1:2]
+keys(l)
+```
+
+
+## Difference between `listArray` and matrix/array
+
+Similarly, it holds
+
+```{r, error=TRUE}
+m <- matrix(1:4, 2, 2)
+m[1,]
+l <- listArray(m)
+l[1,] # will even throw an error
+```
+
+## Normalization and the options `listArray.XXX`
+
+To achieve, e.g. that `l[1:3]` and `l[c(1,2,3)]` address the same element, as we would expect, we need some kind of normalization. Since `1:3` and  `c(1,2,3)` a different R objects, a normalization is internally done.
+
+```{r}
+identical(1:2, c(1,2)) # delivers FALSE!
+# but
+m <- matrix(1:9, 3, 3)
+m[1:2,2]
+m[c(1,2),2]
+```
+
+There are two problems
+
+1. `1:3` is of class `integer` whereas `c(1,2,3)` is of class `numeric` and
+2. `1:3` is a _compact_ sequence in R whereas `c(1,2,3)` is a _full_ vector
+
+Therefore, normalization currently consists of 
+
+1. converting in indices everything from class `integer` to `numeric` and
+2. expand compact sequences like `1:3` to real vectors, e.g. `c(1,2,3)`.
+
+The normalization steps can be switched off by setting the options `listArray.expand` and `listArray.int2num`.
+
+```{r}
+l <- listArray()
+l[1:3] <- 1
+l[c(1,2,3)]
+options(listArray.expand=FALSE) # now 1:3 != c(1,2,3)
+l <- listArray()
+l[1:3] <- 1
+l[c(1,2,3)]
+```
+
+The default is that `listArray.expand` and `listArray.int2num` are not set which is interpreted as `listArray.expand=TRUE` and `listArray.int2num=TRUE`.
+
+# The workhorse function `key`
+
+The main function to create a string from a set of R objects is `key`. By  using `l[...]` internally
+ is called `l[[key(...)]]`. Thus, you could only use `key` rather than a `listArray` object.
+
+The normalization are done via
+
+1. `rapply(l, expand, classes=c("numeric", "integer"), how="replace")` with `expand  <- function(x) { unserialize(serialize(x, connection=NULL, version=2)) }` and 
+2. `rapply(l, as.numeric, classes="integer", how="replace")`.
+
+In future might be further normalization necessary then the two above. 
+
+# Acknowledgments
+
+Thanks to [Henrik Bengtsson](https://www.mail-archive.com/r-help@r-project.org/msg259696.html) and [Duncan Murdoch](https://www.mail-archive.com/r-help@r-project.org/msg259700.html) which hinted me how to normalize a compact sequence in R without writing C++ code.
+
+
+
+
